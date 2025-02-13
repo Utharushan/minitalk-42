@@ -5,63 +5,145 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: tuthayak <tuthayak@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/02/12 23:52:55 by tuthayak          #+#    #+#             */
-/*   Updated: 2025/02/12 23:52:55 by tuthayak         ###   ########.fr       */
+/*   Created: 2025/02/13 14:48:22 by tuthayak          #+#    #+#             */
+/*   Updated: 2025/02/13 14:48:22 by tuthayak         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "minitalk.h"
 
-void	reset_message(char *message, int *char_pos)
+// There should be no errors, but if there is, we will send SIGUSR2 to client.
+// The client code will handle the SIGUSR2 as an error and will exit.
+void	handle_error(int pid, char *str)
+{
+	if (str != NULL)
+		free(str);
+	write(2, "server: unexpected error.\n", 26);
+	kill(pid, SIGUSR2);
+	exit(EXIT_FAILURE);
+}
+
+// It's not a void but a char * because we need to return NULL.
+// So in handle_signal, the message, once printed becomes NULL.
+char	*print_msg(char *message)
 {
 	ft_printf("%s\n", message);
-	*char_pos = 0;
-	ft_bzero(message, 1024);
+	return (free(message), NULL);
 }
 
-void	handle_received_bit(int sig, int *bit_count, unsigned char *current_byte)
+// This function will add 'c' to the end of 'str'.
+// It always frees 'str' and returns the new string.
+//
+// For the first call, 'str' is NULL.
+// So in this case, we return a single letter followed by '\0'.
+char	*str_append_c(char *str, char c)
 {
-	if (sig == SIGUSR1)
-		*current_byte &= ~(1 << (7 - *bit_count));
-	else if (sig == SIGUSR2)
-		*current_byte |= (1 << (7 - *bit_count));
-	(*bit_count)++;
-}
+	char	*add;
+	int		i;
 
-void	signal_handler(int sig, siginfo_t *info, void *context)
-{
-	static int bit_count = 0;
-	static unsigned char current_byte = 0;
-	static char message[1024] = {0};
-	static int char_pos = 0;
-
-	(void)context;
-	(void)info;
-	handle_received_bit(sig, &bit_count, &current_byte);
-	if (bit_count == 8)
+	if (c == '\0')
+		return (NULL);
+	if (str == NULL)
 	{
-		message[char_pos] = current_byte;
-		if (current_byte == '\0')
-			reset_message(message, &char_pos);
-		else
-			char_pos++;
-		bit_count = 0;
-		current_byte = 0;
+		add = malloc(sizeof(char) * 2);
+		if (!add)
+			return (NULL);
+		return (add[0] = c, add[1] = '\0', add);
 	}
+	add = malloc(sizeof(char) * (ft_strlen(str) + 2));
+	if (add == NULL)
+		return (free(str), NULL);
+	i = 0;
+	while (str[i])
+	{
+		add[i] = str[i];
+		i++;
+	}
+	return (free(str), add[i++] = c, add[i] = '\0', add);
 }
 
+// This function basically convert the binary to a char.
+// If we recieve SIGUSR1 (0) :
+// We shift the '0x80' to the right by 'bits' times.
+// Note : 0x80 is equal to 10000000 in binary.
+// Then we modify the bit at the index 'bits' to '0' if it's '1'
+// or keep it to '1' if the bit is already '0'. That's XOR. (^=)
+// If we recieve SIGUSR2 (1) :
+// We do the same but with OR and not XOR.
+// We modify the bit at the index 'bits' to '1' if it's '0'
+// or keep it to '1' if the bit is already '1'. That's OR. (|=)		
+//
+// When the counter 'bits' is equal to 8, it means that we have
+// a full char. (ASCII) We can then print it.
+// Then reset the counter 'bits' to 0 and the char 'c' to 0xFF.
+// So we can start again.
+//
+// It knows when the message is over because the client will send
+// 8 times SIGUSR2 which is equal to '\0' in binary.
+// c is equal to '\0' when we recieves 8 times SIGUSR2.
+void	handle_signal(int signal, siginfo_t *info, void *context)
+{
+	static int	pid = 0;
+	static int	bits = 0;
+	static char	c = 0xFF;
+	static char	*message = 0;
 
+	if (info->si_pid)
+		pid = info->si_pid;
+	if (signal == SIGUSR1)
+		c ^= 0x80 >> bits;
+	else if (signal == SIGUSR2)
+		c |= 0x80 >> bits;
+	bits++;
+	if (bits == 8)
+	{
+		if (c != '\0')
+			message = str_append_c(message, c);
+		else
+			message = print_msg(message);
+		bits = 0;
+		c = 0xFF;
+	}
+	if (kill(pid, SIGUSR1) == -1)
+		handle_error (pid, message);
+	(void)context;
+}
+
+// block_mask is used to specify a set of signals to be blocked.
+//	sigemptyset() initializes the signal set given by 'set' to empty.
+//	sigaddset() adds the individual signal specified by the value of 'signum'
+//	Here we are blocking the SIGINT and SIGQUIT signals. Because they are
+//	forbidden by the subject.
+//	They can be called without any code mentionning them.
+//	For example, SIGINT (interrupt signal) can be called by pressing CTRL+C.
+//	Same for SIGQUIT (quit signal) which can be called by pressing CTRL+\.
+//
+// sa_handler = 0, the signal handler is set to the default behavior.
+// sa_flags = SA_SIGINFO, indicates that handler has a third argument.
+//	which will be a pointer to a siginfo_t structure. (info in handle_signal)
+// sa_mask = block_mask, specifies a set of signals to be blocked during the
+//	execution of the signal handling function.
+// sa_sigaction = handle_signal, specifies the signal handler function.
+//
+// Now that we have set up the sigaction struct, we can use sigaction() to
+//	change the action taken by a process on receipt of a specific signal.
 int	main(void)
 {
-	struct sigaction	sa;
+	struct sigaction	sa_signal;
+	sigset_t			block_mask;
+	int					pid;
 
-	ft_printf("Server PID: %d\n", getpid());
-	sa.sa_flags = SA_SIGINFO;
-	sa.sa_sigaction = signal_handler;
-	sigemptyset(&sa.sa_mask);
-	sigaction(SIGUSR1, &sa, NULL);
-	sigaction(SIGUSR2, &sa, NULL);
+	sigemptyset(&block_mask);
+	sigaddset(&block_mask, SIGINT);
+	sigaddset(&block_mask, SIGQUIT);
+	sa_signal.sa_handler = 0;
+	sa_signal.sa_flags = SA_SIGINFO;
+	sa_signal.sa_mask = block_mask;
+	sa_signal.sa_sigaction = handle_signal;
+	sigaction(SIGUSR1, &sa_signal, NULL);
+	sigaction(SIGUSR2, &sa_signal, NULL);
+	pid = getpid();
+	ft_printf("Server PID : %d\n", pid);
 	while (1)
 		pause();
-	return (0);
 }

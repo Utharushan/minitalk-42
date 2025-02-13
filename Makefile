@@ -15,8 +15,8 @@ CFLAGS = -Wall -Wextra -Werror
 LIBFTPRINTF = libftprintf
 INCLUDES = -I libftprintf/inc -I inc
 
-SRCS_SERVER = server.c
-SRCS_CLIENT = client.c
+SRCS_SERVER = server.c minitalk_utils.c
+SRCS_CLIENT = client.c minitalk_utils.c
 
 OBJS_SERVER = $(SRCS_SERVER:.c=.o)
 OBJS_CLIENT = $(SRCS_CLIENT:.c=.o)
