@@ -12,9 +12,6 @@
 
 #include "minitalk.h"
 
-// This function will convert the string to binary.
-// ABC = 01000001 01000010 01000011
-// bin = 010000010100001001000011
 char	*str_to_bin(char *str)
 {
 	char	*bin;
