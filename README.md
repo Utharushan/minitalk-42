@@ -18,13 +18,13 @@
 ## Installation
 ## Project Structure
 
-├── Makefile
-├── README.md
-├── inc/minitalk.h
-├── libftprintf
-├── client.c
-├── server.c
-├── minitalk_utils.c
+├── Makefile\
+├── README.md\
+├── inc/minitalk.h\
+├── libftprintf\
+├── client.c\
+├── server.c\
+├── minitalk_utils.c\
 └── normi
 
 ### Prerequisites
