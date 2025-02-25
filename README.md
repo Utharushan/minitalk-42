@@ -64,12 +64,4 @@ To compile and use this project, you will need:
 	./client <server_pid> "Your message here"
 	```
 
-<<<<<<< HEAD
-	Replace `<server_pid>` with the PID printed by the server and `"Your message here"` with the message you want to send.
-=======
-	Replace `<server_pid>` with the PID printed by the server and `"Your message here"` with the message you want to send.
-
-## License
-
-This project is licensed under the MIT License.
->>>>>>> 51e9db9e7458a99e99f2083a615ac08c77253770
+Replace `<server_pid>` with the PID printed by the server and `"Your message here"` with the message you want to send.
